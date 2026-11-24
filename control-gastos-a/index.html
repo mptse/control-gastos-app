@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Gastos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <div class="max-w-4xl mx-auto p-6">
+        <!-- Encabezado -->
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">Control de Gastos</h1>
+                <p class="text-sm text-slate-500">Gestión financiera personal</p>
+            </div>
+        </header>
+
+        <!-- Tarjetas de Resumen -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-sm text-slate-500 font-medium">Balance Total</p>
+                <p id="balance-total" class="text-2xl font-bold text-slate-900 mt-1">$0</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-sm text-slate-500 font-medium">Ingresos</p>
+                <p id="total-ingresos" class="text-2xl font-bold text-emerald-600 mt-1">$0</p>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-sm text-slate-500 font-medium">Gastos</p>
+                <p id="total-gastos" class="text-2xl font-bold text-rose-600 mt-1">$0</p>
+            </div>
+        </div>
+
+        <!-- Formulario de Registro -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+            <h2 class="text-lg font-semibold mb-4">Nuevo Movimiento</h2>
+            <form id="form-transaccion" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <input type="text" id="descripcion" placeholder="Descripción (ej. Supermercado)" required
+                    class="md:col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-600">
+                
+                <input type="number" id="monto" placeholder="Monto" step="0.01" min="0.01" required
+                    class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-600">
+                
+                <select id="tipo" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-600">
+                    <option value="gasto">Gasto (-)</option>
+                    <option value="ingreso">Ingreso (+)</option>
+                </select>
+
+                <select id="categoria" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-600">
+                    <option value="Alimentación">Alimentación</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Servicios">Servicios</option>
+                    <option value="Ocio">Ocio</option>
+                    <option value="Salario">Salario</option>
+                    <option value="Otros">Otros</option>
+                </select>
+
+                <button type="submit" 
+                    class="md:col-span-5 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg text-sm transition">
+                    Registrar Movimiento
+                </button>
+            </form>
+        </div>
+
+        <!-- Tabla de Historial -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold">Historial de Movimientos</h2>
+                <select id="filtro-categoria" onchange="renderizar()" class="border border-slate-300 rounded-lg px-2.5 py-1 text-xs">
+                    <option value="Todas">Todas las categorías</option>
+                    <option value="Alimentación">Alimentación</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Servicios">Servicios</option>
+                    <option value="Ocio">Ocio</option>
+                    <option value="Salario">Salario</option>
+                    <option value="Otros">Otros</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
+                            <th class="py-3 px-4">Fecha</th>
+                            <th class="py-3 px-4">Descripción</th>
+                            <th class="py-3 px-4">Categoría</th>
+                            <th class="py-3 px-4 text-right">Monto</th>
+                            <th class="py-3 px-4 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-transacciones" class="divide-y divide-slate-100 text-sm">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let transacciones = [];
+
+        const formatoMoneda = (valor) => {
+            return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valor);
+        };
+
+        async function cargarDatos() {
+            const res = await fetch('/api/transacciones');
+            transacciones = await res.json();
+            renderizar();
+        }
+
+        function renderizar() {
+            const tbody = document.getElementById('lista-transacciones');
+            const filtro = document.getElementById('filtro-categoria').value;
+            tbody.innerHTML = '';
+
+            let ingresos = 0;
+            let gastos = 0;
+
+            transacciones.forEach(tx => {
+                if (tx.tipo === 'ingreso') ingresos += tx.monto;
+                else gastos += tx.monto;
+
+                if (filtro !== 'Todas' && tx.categoria !== filtro) return;
+
+                const esIngreso = tx.tipo === 'ingreso';
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-slate-500 text-xs">${tx.fecha}</td>
+                    <td class="py-3 px-4 font-medium">${tx.descripcion}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-700">${tx.categoria}</span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-semibold ${esIngreso ? 'text-emerald-600' : 'text-rose-600'}">
+                        ${esIngreso ? '+' : '-'} ${formatoMoneda(tx.monto)}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="eliminar(${tx.id})" class="text-slate-400 hover:text-rose-600 text-xs font-medium">Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('total-ingresos').textContent = formatoMoneda(ingresos);
+            document.getElementById('total-gastos').textContent = formatoMoneda(gastos);
+            document.getElementById('balance-total').textContent = formatoMoneda(ingresos - gastos);
+        }
+
+        document.getElementById('form-transaccion').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                descripcion: document.getElementById('descripcion').value,
+                monto: parseFloat(document.getElementById('monto').value),
+                tipo: document.getElementById('tipo').value,
+                categoria: document.getElementById('categoria').value
+            };
+
+            const res = await fetch('/api/transacciones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                e.target.reset();
+                cargarDatos();
+            }
+        });
+
+        async function eliminar(id) {
+            await fetch(`/api/transacciones/${id}`, { method: 'DELETE' });
+            cargarDatos();
+        }
+
+        cargarDatos();
+    </script>
+</body>
+</html>
