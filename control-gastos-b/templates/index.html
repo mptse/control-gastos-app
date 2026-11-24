@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de gastos</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="contenedor">
+    <header class="encabezado">
+      <div>
+        <h1>Control de gastos</h1>
+        <p class="subtitulo">Registra, consulta y elimina tus gastos en memoria.</p>
+      </div>
+      <div class="resumen-total" aria-live="polite">
+        <span class="etiqueta-total">Total acumulado</span>
+        <strong id="total-acumulado" class="valor-total">${{ "%.2f"|format(total) }}</strong>
+      </div>
+    </header>
+
+    <section class="tarjeta" aria-label="Agregar gasto">
+      <h2>Nuevo gasto</h2>
+      <form id="form-gasto" class="formulario">
+        <div class="campo">
+          <label for="concepto">Concepto</label>
+          <input
+            id="concepto"
+            name="concepto"
+            type="text"
+            maxlength="100"
+            placeholder="Ej. Almuerzo"
+            required
+          />
+        </div>
+        <div class="campo">
+          <label for="monto">Monto</label>
+          <input
+            id="monto"
+            name="monto"
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="0.00"
+            required
+          />
+        </div>
+        <div class="campo">
+          <label for="categoria">Categoría</label>
+          <input
+            id="categoria"
+            name="categoria"
+            type="text"
+            placeholder="Ej. Comida"
+            required
+          />
+        </div>
+        <div class="acciones-form">
+          <button type="submit" class="btn btn-primario">Agregar gasto</button>
+        </div>
+      </form>
+      <p id="mensaje-error" class="mensaje-error" role="alert" hidden></p>
+    </section>
+
+    <section class="tarjeta" aria-label="Registro de gastos">
+      <div class="cabecera-seccion">
+        <h2>Registro de gastos</h2>
+      </div>
+      <div class="tabla-envoltorio">
+        <table class="tabla-gastos">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Concepto</th>
+              <th>Categoría</th>
+              <th>Monto</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="lista-gastos">
+            {% if gastos %}
+              {% for gasto in gastos %}
+                <tr data-gasto-id="{{ gasto.id }}">
+                  <td>{{ gasto.id }}</td>
+                  <td>{{ gasto.concepto }}</td>
+                  <td><span class="insignia">{{ gasto.categoria }}</span></td>
+                  <td class="monto-celda">${{ "%.2f"|format(gasto.monto) }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      class="btn btn-eliminar"
+                      data-eliminar-id="{{ gasto.id }}"
+                      aria-label="Eliminar gasto {{ gasto.concepto }}"
+                    >
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr id="fila-vacia">
+                <td colspan="5" class="estado-vacio">No hay gastos registrados todavía.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const form = document.getElementById("form-gasto");
+      const cuerpoTabla = document.getElementById("lista-gastos");
+      const totalElemento = document.getElementById("total-acumulado");
+      const errorElemento = document.getElementById("mensaje-error");
+
+      function mostrarError(texto) {
+        errorElemento.textContent = texto;
+        errorElemento.hidden = false;
+      }
+
+      function limpiarError() {
+        errorElemento.textContent = "";
+        errorElemento.hidden = true;
+      }
+
+      function formatearMonto(valor) {
+        return "$" + Number(valor).toFixed(2);
+      }
+
+      function recalcularTotal() {
+        const montos = Array.from(cuerpoTabla.querySelectorAll("tr[data-gasto-id]")).map((fila) => {
+          const textoMonto = fila.querySelector(".monto-celda")?.textContent || "0";
+          return parseFloat(textoMonto.replace(/[^0-9.-]+/g, "")) || 0;
+        });
+        const suma = montos.reduce((acc, n) => acc + n, 0);
+        totalElemento.textContent = formatearMonto(suma);
+      }
+
+      function asegurarEstadoVacio() {
+        const filasGastos = cuerpoTabla.querySelectorAll("tr[data-gasto-id]");
+        if (filasGastos.length === 0 && !document.getElementById("fila-vacia")) {
+          const tr = document.createElement("tr");
+          tr.id = "fila-vacia";
+          tr.innerHTML = '<td colspan="5" class="estado-vacio">No hay gastos registrados todavía.</td>';
+          cuerpoTabla.appendChild(tr);
+        } else if (filasGastos.length > 0) {
+          document.getElementById("fila-vacia")?.remove();
+        }
+      }
+
+      function crearFilaGasto(gasto) {
+        const tr = document.createElement("tr");
+        tr.dataset.gastoId = String(gasto.id);
+
+        const tdId = document.createElement("td");
+        tdId.textContent = String(gasto.id);
+
+        const tdConcepto = document.createElement("td");
+        tdConcepto.textContent = String(gasto.concepto);
+
+        const tdCategoria = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = "insignia";
+        badge.textContent = String(gasto.categoria);
+        tdCategoria.appendChild(badge);
+
+        const tdMonto = document.createElement("td");
+        tdMonto.className = "monto-celda";
+        tdMonto.textContent = formatearMonto(gasto.monto);
+
+        const tdAcciones = document.createElement("td");
+        const btnEliminar = document.createElement("button");
+        btnEliminar.type = "button";
+        btnEliminar.className = "btn btn-eliminar";
+        btnEliminar.dataset.eliminarId = String(gasto.id);
+        btnEliminar.setAttribute("aria-label", "Eliminar gasto " + gasto.concepto);
+        btnEliminar.textContent = "Eliminar";
+        tdAcciones.appendChild(btnEliminar);
+
+        tr.append(tdId, tdConcepto, tdCategoria, tdMonto, tdAcciones);
+        return tr;
+      }
+
+      form.addEventListener("submit", async function (evento) {
+        evento.preventDefault();
+        limpiarError();
+
+        const concepto = document.getElementById("concepto").value.trim();
+        const monto = parseFloat(document.getElementById("monto").value);
+        const categoria = document.getElementById("categoria").value.trim();
+
+        if (!concepto || concepto.length > 100) {
+          mostrarError("El concepto debe tener entre 1 y 100 caracteres.");
+          return;
+        }
+        if (Number.isNaN(monto) || monto <= 0) {
+          mostrarError("El monto debe ser un número mayor que 0.");
+          return;
+        }
+        if (!categoria) {
+          mostrarError("La categoría es obligatoria.");
+          return;
+        }
+
+        try {
+          const respuesta = await fetch("/api/gastos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ concepto, monto, categoria }),
+          });
+
+          if (!respuesta.ok) {
+            const detalle = await respuesta.json().catch(() => ({}));
+            mostrarError(detalle.detail ? "Verifica los datos ingresados." : "No se pudo crear el gasto.");
+            return;
+          }
+
+          const creado = await respuesta.json();
+          asegurarEstadoVacio();
+          cuerpoTabla.appendChild(crearFilaGasto(creado));
+          recalcularTotal();
+          form.reset();
+          document.getElementById("concepto").focus();
+        } catch (err) {
+          mostrarError("Error de conexión al registrar el gasto.");
+        }
+      });
+
+      cuerpoTabla.addEventListener("click", async function (evento) {
+        const boton = evento.target.closest("[data-eliminar-id]");
+        if (!boton) {
+          return;
+        }
+        limpiarError();
+
+        const gastoId = boton.dataset.eliminarId;
+        try {
+          const respuesta = await fetch("/api/gastos/" + encodeURIComponent(gastoId), {
+            method: "DELETE",
+          });
+
+          if (respuesta.status === 204 || respuesta.status === 404) {
+            const fila = cuerpoTabla.querySelector('tr[data-gasto-id="' + CSS.escape(gastoId) + '"]');
+            if (fila) {
+              fila.remove();
+            }
+            asegurarEstadoVacio();
+            recalcularTotal();
+          } else {
+            mostrarError("No se pudo eliminar el gasto.");
+          }
+        } catch (err) {
+          mostrarError("Error de conexión al eliminar el gasto.");
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
